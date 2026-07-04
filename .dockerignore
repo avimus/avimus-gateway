@@ -1,0 +1,15 @@
+node_modules/
+dist/
+dist-test/
+.git/
+Dockerfile*
+.dockerignore
+*.log*
+.env*
+coverage/
+tests/
+specs/
+.claude/
+.specify/
+GATEWAY_SPEC.md
+CLAUDE.md
