@@ -8,6 +8,14 @@
 
 **Input**: User description: "Serviço Node.js/TypeScript que atua como gateway WebSocket entre containers externos (apx-health-socket rodando em redes privadas de clientes hospitalares) e a API Ávimus Patient Journey (Hono no Vercel, sem suporte a WebSocket persistente). Responsabilidades: aceitar conexões WSS autenticadas por JWT; validar e revogar tokens; manter registry de conexões ativas; repassar HEARTBEAT e EVENT para a API Ávimus; detectar desconexão; enfileirar mensagens quando a API estiver offline; responder ACK/ERROR; notificar REVOKED. Endpoints administrativos /health, /metrics, /admin/revoke. Mascaramento de CPF em logs, rate limit por tenant, WSS obrigatório em produção."
 
+## Clarifications
+
+### Session 2026-07-03
+
+- Q: Deve haver trilha de auditoria para ações administrativas sensíveis (revogação de credencial, tentativas negadas de acesso a `/metrics` e `/admin/revoke`)? → A: Sim, cada ação (sucesso ou negada) é registrada como log estruturado (timestamp, ação, identificador do token afetado), sem armazenamento de auditoria separado nem novo dependência externa.
+- Q: Qual a meta de disponibilidade (uptime) esperada para o gateway? → A: 99.9% mensal (~43 min de indisponibilidade/mês), padrão single-region, compatível com o outbox local e a reconexão com backoff do container cliente.
+- Q: Os endpoints administrativos (`/metrics`, `/admin/revoke`) devem ficar restritos à rede interna/privada além do header de segredo? → A: Sim — acesso restrito à rede interna/privada (não expostos publicamente pelo load balancer/ingress) mais o header `x-internal-secret` como segunda camada de defesa.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Hospital streams patient journey events in real time (Priority: P1)
@@ -224,6 +232,15 @@ attempt to reconnect with the same token and verify it is rejected.
 - **FR-017**: System MUST close all active hospital connections in an orderly
   fashion when the service is asked to shut down, rather than dropping them
   abruptly (per the project's graceful-shutdown principle).
+- **FR-018**: System MUST record every administrative action — credential
+  revocation, and denied access attempts to the metrics or revoke views — as a
+  structured log entry including a timestamp, the action taken, and the
+  affected token identifier, without persisting a separate audit store.
+- **FR-019**: The metrics view and the revoke action MUST only be reachable
+  from an internal/private network path (not exposed publicly by the
+  deployment's load balancer or ingress), in addition to requiring the
+  internal-operations credential — a deployment-level requirement, not solely
+  an application-level check.
 
 ### Key Entities
 
@@ -268,6 +285,8 @@ attempt to reconnect with the same token and verify it is rejected.
   number, across all log volume produced.
 - **SC-007**: The gateway sustains 10 simultaneous connections per hospital
   without rejecting any of the first 10 legitimate connection attempts.
+- **SC-008**: The gateway maintains at least 99.9% uptime measured monthly (no
+  more than ~43 minutes of unplanned downtime per month).
 
 ## Assumptions
 
