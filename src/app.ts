@@ -35,6 +35,11 @@ export function createApp(config: GatewayConfig): App {
     }),
   );
 
+  // ponytail: debug aid for tracing 403s through SnapDeploy's proxy; remove once the opaque-token rollout is confirmed stable.
+  server.on("upgrade", (req) => {
+    logger.info({ method: req.method, url: req.url, headers: req.headers }, "http server: upgrade event received");
+  });
+
   createWsServer(server, {
     jwtSecret: config.gatewayJwtSecret,
     revocationList,

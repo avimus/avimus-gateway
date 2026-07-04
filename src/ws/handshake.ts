@@ -4,6 +4,7 @@ import type { RevocationList } from "../auth/revocationList";
 import { isCompatibleProtocolVersion } from "./protocolVersion";
 import { MAX_CONNECTIONS_PER_TENANT, type ConnectionRegistry } from "./connectionRegistry";
 import type { AvimusClient } from "../avimus-client/client";
+import type { Logger } from "../logging/logger";
 
 const OPAQUE_TOKEN_PREFIX = "hst_";
 
@@ -13,6 +14,7 @@ export interface HandshakeDeps {
   isProduction: boolean;
   registry: ConnectionRegistry;
   avimusClient: AvimusClient;
+  logger: Logger;
 }
 
 export interface AuthenticatedRequest extends IncomingMessage {
@@ -56,21 +58,32 @@ export function createVerifyClient(deps: HandshakeDeps) {
   return async (info: VerifyClientInfo, callback: VerifyClientCallback): Promise<void> => {
     const req = info.req as AuthenticatedRequest;
 
+    deps.logger.info(
+      { method: req.method, url: req.url, headers: req.headers, secure: info.secure },
+      "handshake: request received",
+    );
+
+    // ponytail: single chokepoint so every accept/reject path logs the outcome without repeating a log call at each return.
+    const finish = (result: boolean, code?: number, message?: string): void => {
+      deps.logger.info({ result, code, message }, "handshake: verdict");
+      callback(result, code, message);
+    };
+
     if (deps.isProduction && !isSecureRequest(req, info.secure)) {
-      callback(false, 400, "wss required in production");
+      finish(false, 400, "wss required in production");
       return;
     }
 
     const url = new URL(req.url ?? "", "http://localhost");
     const token = extractToken(req, url);
     if (!token) {
-      callback(false, 401, "missing token");
+      finish(false, 401, "missing token");
       return;
     }
 
     const version = url.searchParams.get("version") ?? "1.0.0";
     if (!isCompatibleProtocolVersion(version)) {
-      callback(false, 403, `incompatible protocol version: ${version}`);
+      finish(false, 403, `incompatible protocol version: ${version}`);
       return;
     }
 
@@ -81,21 +94,21 @@ export function createVerifyClient(deps: HandshakeDeps) {
         : verifyToken(token, deps.jwtSecret);
     } catch (err) {
       const code = err instanceof TokenValidationError ? err.code : 401;
-      callback(false, code, (err as Error).message);
+      finish(false, code, (err as Error).message);
       return;
     }
 
     if (deps.revocationList.isRevoked(payload.jti)) {
-      callback(false, 403, "token revoked");
+      finish(false, 403, "token revoked");
       return;
     }
 
     if (deps.registry.countForTenant(payload.tenantId) >= MAX_CONNECTIONS_PER_TENANT) {
-      callback(false, 429, "tenant connection limit reached");
+      finish(false, 429, "tenant connection limit reached");
       return;
     }
 
     req.gatewayAuth = payload;
-    callback(true);
+    finish(true);
   };
 }

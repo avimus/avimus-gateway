@@ -32,6 +32,7 @@ export function createWsServer(httpServer: http.Server, deps: WsServerDeps): Web
       isProduction: deps.isProduction,
       registry: deps.registry,
       avimusClient: deps.avimusClient,
+      logger: deps.logger,
     }),
   });
 
