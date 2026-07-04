@@ -24,12 +24,29 @@ export interface AuthenticatedRequest extends IncomingMessage {
 type VerifyClientCallback = (result: boolean, code?: number, message?: string) => void;
 type VerifyClientInfo = { origin: string; secure: boolean; req: IncomingMessage };
 
-/** Requests are secure if terminated with TLS here, or upstream by a reverse proxy that sets this header. */
+/**
+ * Requests are secure if terminated with TLS here, or upstream by a reverse proxy.
+ * SnapDeploy's edge sets `x-forwarded-proto: http` even for HTTPS clients (a platform
+ * quirk, confirmed 2026-07-04), so `cf-visitor` — Cloudflare's own record of the
+ * client-facing scheme — is checked too before falling back to the raw socket.
+ */
 function isSecureRequest(req: IncomingMessage, secureAtThisSocket: boolean): boolean {
   const forwardedProto = req.headers["x-forwarded-proto"];
-  if (typeof forwardedProto === "string") {
-    return forwardedProto.split(",")[0]?.trim() === "https";
+  if (typeof forwardedProto === "string" && forwardedProto.split(",")[0]?.trim() === "https") {
+    return true;
   }
+
+  const cfVisitor = req.headers["cf-visitor"];
+  if (typeof cfVisitor === "string") {
+    try {
+      if ((JSON.parse(cfVisitor) as { scheme?: string }).scheme === "https") {
+        return true;
+      }
+    } catch {
+      // malformed header, ignore and fall through
+    }
+  }
+
   return secureAtThisSocket;
 }
 

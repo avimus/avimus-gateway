@@ -101,6 +101,36 @@ test("missing token is rejected with HTTP 401", async () => {
   }
 });
 
+test("production: plain ws:// is rejected with HTTP 400 when no proxy header claims https", async () => {
+  const running = await startTestApp(buildTestConfig({ NODE_ENV: "production" }));
+  try {
+    const token = makeToken(SECRET);
+    const ws = connect(running.wsUrl, token);
+    const status = await waitForUnexpectedResponse(ws);
+    assert.equal(status, 400);
+  } finally {
+    await running.close();
+  }
+});
+
+test("production: cf-visitor scheme=https is trusted even when x-forwarded-proto lies (SnapDeploy quirk)", async () => {
+  const running = await startTestApp(buildTestConfig({ NODE_ENV: "production" }));
+  try {
+    const token = makeToken(SECRET);
+    const ws = new WebSocket(`${running.wsUrl}?token=${encodeURIComponent(token)}`, {
+      headers: { "x-forwarded-proto": "http", "cf-visitor": '{"scheme":"https"}' },
+    });
+    const collector = new MessageCollector(ws);
+    const opened = await waitForOpenOrClose(ws);
+    assert.equal(opened.event, "open");
+    const first = await collector.next();
+    assert.equal(first.type, "auth_ok");
+    ws.close();
+  } finally {
+    await running.close();
+  }
+});
+
 test("opaque hst_ token in Authorization header is validated against the Avimus API", async () => {
   const avimus = await startStubAvimusApi();
   avimus.validateTokenResponse = { valid: true, tenantId: "hosp-opaque", erpName: "tasy" };
