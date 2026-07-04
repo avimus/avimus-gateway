@@ -1,50 +1,126 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+Sync Impact Report
+Version change: template (unratified) → 1.0.0
+Modified principles: n/a (initial ratification)
+Added sections:
+  - Core Principles I–VI (Robustez em Produção Hospitalar, Simplicidade,
+    Código Limpo/Tipado/Testável, Segurança e LGPD, Zero Dependência de
+    Banco de Dados, Graceful Shutdown Obrigatório)
+  - Restrições Técnicas
+  - Fluxo de Desenvolvimento e Qualidade
+  - Governança
+Removed sections: none (initial fill of template placeholders)
+Templates requiring updates:
+  - .specify/templates/plan-template.md ✅ no change needed (Constitution
+    Check gate is generic and reads this file dynamically)
+  - .specify/templates/spec-template.md ✅ no change needed (no hardcoded
+    principle references)
+  - .specify/templates/tasks-template.md ✅ no change needed (no hardcoded
+    principle references)
+  - .specify/templates/checklist-template.md ✅ no change needed
+Follow-up TODOs: none
+-->
+
+# Avimus Gateway Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Robustez em Produção Hospitalar
+O serviço opera como gateway WebSocket em ambiente hospitalar de produção, onde
+falhas têm impacto direto sobre sistemas clínicos. Toda alteração DEVE preservar
+a disponibilidade e a integridade das conexões WebSocket ativas. Erros DEVEM ser
+tratados explicitamente — nenhuma exceção não capturada pode derrubar o
+processo. Diante de falhas de rede ou de upstream, o serviço DEVE degradar de
+forma previsível (reconexão, backoff, mensagens de erro claras) em vez de falhar
+silenciosamente.
+**Rationale**: ambiente hospitalar não tolera indisponibilidade silenciosa nem
+comportamento imprevisível sob erro.
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+### II. Simplicidade — Sem Over-Engineering (YAGNI)
+Toda solução DEVE usar a implementação mais simples que resolva a necessidade
+real e já verificada, não hipóteses futuras. Novas abstrações, camadas,
+padrões de design ou dependências SOMENTE são introduzidas quando o código
+atual demonstrar necessidade concreta. Complexidade adicional DEVE ser
+justificada explicitamente na revisão de código.
+**Rationale**: complexidade não solicitada é a maior fonte de bugs e dívida
+técnica em serviços críticos; um gateway simples é mais fácil de operar e
+depurar sob incidente.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### III. Código Limpo, Tipado e Testável
+Todo código DEVE ser escrito em TypeScript com `strict` habilitado no
+`tsconfig`; o uso de `any` implícito é proibido. Funções e módulos DEVEM ser
+pequenos, coesos e testáveis de forma isolada. Lógica não trivial (parsing,
+branching, fluxo de conexão/reconexão, mascaramento de dados) DEVE ter
+cobertura de teste automatizado antes de ser considerada concluída.
+**Rationale**: tipagem forte e testes são a rede de segurança que permite
+evoluir o gateway sem quebrar produção hospitalar.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### IV. Segurança e Conformidade com a LGPD
+CPF e demais dados pessoais sensíveis NUNCA DEVEM aparecer completos em logs,
+mensagens de erro, stack traces ou qualquer saída persistida. CPF DEVE ser
+mascarado (exibindo no máximo os 3 últimos dígitos) em todo ponto de logging,
+antes de a informação sair da camada que a recebeu. Todo novo campo de dado
+pessoal introduzido no fluxo DEVE ser avaliado quanto à necessidade de
+mascaramento antes de ser logado.
+**Rationale**: exigência legal (LGPD) e ética em contexto de saúde; vazamento
+de CPF em log é uma violação de dados, não um detalhe de implementação.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### V. Zero Dependência de Banco de Dados
+O serviço DEVE operar sem banco de dados (SQL ou NoSQL) como dependência de
+runtime. Estado necessário DEVE ser mantido em memória do processo; qualquer
+necessidade de persistência DEVE ser resolvida por sistemas externos já
+existentes, nunca por uma camada de persistência própria deste serviço.
+**Rationale**: manter o gateway stateless reduz drasticamente a superfície de
+falha, de operação e de compliance — um lugar a menos onde dados de paciente
+podem vazar ou ficar desatualizados.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+### VI. Graceful Shutdown Obrigatório
+O processo DEVE tratar sinais de encerramento (SIGTERM/SIGINT) fechando as
+conexões WebSocket ativas de forma ordenada — drenando mensagens em trânsito
+quando aplicável — e só então finalizar. Deploys, restarts e escalonamento
+NUNCA DEVEM derrubar conexões abruptamente sem passar pelo fluxo de shutdown.
+**Rationale**: em produção hospitalar, um encerramento abrupto pode cortar
+comunicação de dispositivos ou monitoramento em uso; o shutdown correto é
+parte da robustez do serviço, não um extra.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+## Restrições Técnicas
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+- Stack obrigatória: Node.js + TypeScript, com `strict` habilitado no
+  `tsconfig`.
+- Nenhuma dependência de banco de dados como requisito de runtime (Princípio
+  V).
+- Novas dependências de terceiros DEVEM ser justificadas (Princípio II) e não
+  podem substituir capacidade já coberta pela stdlib do Node.js.
+- Logging DEVE ser estruturado; qualquer log contendo dado pessoal passa por
+  mascaramento (Princípio IV) antes de ser emitido.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+## Fluxo de Desenvolvimento e Qualidade
 
-## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
+- Toda mudança que tocar lógica não trivial DEVE incluir teste automatizado
+  antes de ser considerada concluída (Princípio III).
+- Revisão de código DEVE verificar aderência aos princípios acima, com atenção
+  especial a mascaramento de CPF (Princípio IV) e tratamento de shutdown
+  (Princípio VI).
+- Complexidade adicional (nova dependência, nova abstração, novo serviço
+  auxiliar) DEVE ser justificada por escrito na revisão, citando a necessidade
+  concreta que a motiva.
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+## Governança
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+Esta constituição prevalece sobre qualquer prática, convenção ou preferência
+individual em conflito. Emendas exigem: (1) registro da mudança e da
+motivação, (2) atualização de versão conforme a política semântica abaixo, (3)
+verificação de que os templates dependentes (plan, spec, tasks, checklist)
+permanecem consistentes com os princípios revisados.
+
+Política de versionamento semântico:
+- MAJOR: remoção ou redefinição incompatível de um princípio existente.
+- MINOR: adição de novo princípio ou expansão material de um princípio
+  existente.
+- PATCH: esclarecimentos, correções de texto, ajustes não semânticos.
+
+Toda revisão de código e todo plano de implementação DEVEM verificar
+conformidade com os princípios acima antes da aprovação. Complexidade não
+justificada é motivo de rejeição na revisão.
+
+**Version**: 1.0.0 | **Ratified**: 2026-07-03 | **Last Amended**: 2026-07-03
