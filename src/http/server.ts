@@ -19,7 +19,7 @@ export function createRequestHandler(deps: HttpRouterDeps): (req: IncomingMessag
   return (req, res) => {
     const path = new URL(req.url ?? "/", "http://localhost").pathname;
 
-    if (req.method === "GET" && path === "/health") {
+    if (req.method === "GET" && (path === "/health" || path === "/")) {
       handleHealth(req, res, deps.registry);
       return;
     }
