@@ -1,11 +1,19 @@
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 
+export interface ValidateTokenRequest {
+  authorization: string | undefined;
+  internalSecret: string | undefined;
+}
+
 export interface StubAvimusApi {
   baseUrl: string;
   heartbeats: Record<string, unknown>[];
   events: Record<string, unknown>[];
+  validateTokenRequests: ValidateTokenRequest[];
   failing: boolean;
+  /** Response body returned by GET /api/v1/internal/validate-token; defaults to a valid tasy tenant. */
+  validateTokenResponse: { valid: boolean; tenantId: string; erpName: string };
   close(): Promise<void>;
 }
 
@@ -13,9 +21,29 @@ export interface StubAvimusApi {
 export async function startStubAvimusApi(): Promise<StubAvimusApi> {
   const heartbeats: Record<string, unknown>[] = [];
   const events: Record<string, unknown>[] = [];
-  const state = { failing: false };
+  const validateTokenRequests: ValidateTokenRequest[] = [];
+  const state = {
+    failing: false,
+    validateTokenResponse: { valid: true, tenantId: "hosp-opaque", erpName: "tasy" },
+  };
 
   const server = http.createServer((req, res) => {
+    if (req.method === "GET" && req.url === "/api/v1/internal/validate-token") {
+      validateTokenRequests.push({
+        authorization: req.headers.authorization,
+        internalSecret: req.headers["x-internal-secret"] as string | undefined,
+      });
+      if (state.failing) {
+        res.statusCode = 503;
+        res.end();
+        return;
+      }
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify(state.validateTokenResponse));
+      return;
+    }
+
     let body = "";
     req.on("data", (chunk) => (body += chunk));
     req.on("end", () => {
@@ -40,11 +68,18 @@ export async function startStubAvimusApi(): Promise<StubAvimusApi> {
     baseUrl: `http://localhost:${port}`,
     heartbeats,
     events,
+    validateTokenRequests,
     get failing() {
       return state.failing;
     },
     set failing(value: boolean) {
       state.failing = value;
+    },
+    get validateTokenResponse() {
+      return state.validateTokenResponse;
+    },
+    set validateTokenResponse(value: { valid: boolean; tenantId: string; erpName: string }) {
+      state.validateTokenResponse = value;
     },
     close: () =>
       new Promise<void>((resolve) => {

@@ -20,6 +20,12 @@ export interface OfflineNotification {
   status: "offline";
 }
 
+export interface TokenValidationResult {
+  valid: boolean;
+  tenantId: string;
+  erpName: string;
+}
+
 const DEFAULT_TIMEOUT_MS = 5000;
 
 /** Thrown (via axios rejection) on any network error, timeout, or non-2xx response. */
@@ -40,5 +46,13 @@ export class AvimusClient {
 
   async sendEvent(payload: EventForward): Promise<void> {
     await this.http.post("/api/v1/internal/events", payload);
+  }
+
+  /** Validates an opaque `hst_...` token against the Ávimus API. */
+  async validateToken(token: string): Promise<TokenValidationResult> {
+    const { data } = await this.http.get<TokenValidationResult>("/api/v1/internal/validate-token", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return data;
   }
 }

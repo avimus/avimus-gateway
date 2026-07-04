@@ -31,6 +31,7 @@ export function createWsServer(httpServer: http.Server, deps: WsServerDeps): Web
       revocationList: deps.revocationList,
       isProduction: deps.isProduction,
       registry: deps.registry,
+      avimusClient: deps.avimusClient,
     }),
   });
 

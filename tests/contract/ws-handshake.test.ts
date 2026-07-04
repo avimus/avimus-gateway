@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import WebSocket from "ws";
 import { buildTestConfig, startTestApp, type RunningTestApp } from "../helpers/testApp";
+import { startStubAvimusApi } from "../helpers/stubAvimusApi";
 import { makeToken } from "../helpers/token";
 import { waitForOpenOrClose, MessageCollector } from "../helpers/wsClient";
 
@@ -97,5 +98,42 @@ test("missing token is rejected with HTTP 401", async () => {
     assert.equal(status, 401);
   } finally {
     await running.close();
+  }
+});
+
+test("opaque hst_ token in Authorization header is validated against the Avimus API", async () => {
+  const avimus = await startStubAvimusApi();
+  avimus.validateTokenResponse = { valid: true, tenantId: "hosp-opaque", erpName: "tasy" };
+  const running = await startTestApp(buildTestConfig({ AVIMUS_API_URL: avimus.baseUrl }));
+  try {
+    const ws = new WebSocket(running.wsUrl, { headers: { Authorization: "Bearer hst_abc123" } });
+    const collector = new MessageCollector(ws);
+    const opened = await waitForOpenOrClose(ws);
+    assert.equal(opened.event, "open");
+    const first = await collector.next();
+    assert.equal(first.type, "auth_ok");
+    assert.equal(first.tenantId, "hosp-opaque");
+
+    assert.equal(avimus.validateTokenRequests.length, 1);
+    assert.equal(avimus.validateTokenRequests[0]?.authorization, "Bearer hst_abc123");
+    assert.equal(avimus.validateTokenRequests[0]?.internalSecret, "test-internal-secret");
+    ws.close();
+  } finally {
+    await running.close();
+    await avimus.close();
+  }
+});
+
+test("opaque hst_ token rejected by the Avimus API gets HTTP 401", async () => {
+  const avimus = await startStubAvimusApi();
+  avimus.validateTokenResponse = { valid: false, tenantId: "", erpName: "" };
+  const running = await startTestApp(buildTestConfig({ AVIMUS_API_URL: avimus.baseUrl }));
+  try {
+    const ws = new WebSocket(running.wsUrl, { headers: { Authorization: "Bearer hst_bad" } });
+    const status = await waitForUnexpectedResponse(ws);
+    assert.equal(status, 401);
+  } finally {
+    await running.close();
+    await avimus.close();
   }
 });
