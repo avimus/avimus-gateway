@@ -25,19 +25,31 @@ export function createApp(config: GatewayConfig): App {
   const avimusClient = new AvimusClient(config.avimusApiUrl, config.avimusInternalSecret);
   const queue = new MessageQueue(config.maxQueuePerTenant);
 
-  const server = http.createServer(
-    createRequestHandler({
-      registry,
-      queue,
-      revocationList,
-      internalSecret: config.avimusInternalSecret,
-      logger,
-    }),
-  );
+  const requestHandler = createRequestHandler({
+    registry,
+    queue,
+    revocationList,
+    internalSecret: config.avimusInternalSecret,
+    logger,
+  });
+
+  const server = http.createServer(requestHandler);
 
   // ponytail: debug aid for tracing 403s through SnapDeploy's proxy; remove once the opaque-token rollout is confirmed stable.
-  server.on("upgrade", (req) => {
+  server.on("upgrade", (req, socket) => {
     logger.info({ method: req.method, url: req.url, headers: req.headers }, "http server: upgrade event received");
+
+    // SnapDeploy's health probe sends an opportunistic h2c Upgrade header even on
+    // plain GETs. `ws` only reacts to real websocket upgrades on /ws and silently
+    // ignores anything else, leaving the socket hanging until the probe times out
+    // and SnapDeploy kills the container. Answer non-websocket upgrades as plain
+    // HTTP so /health and / still get a real response.
+    if (req.headers.upgrade?.toLowerCase() !== "websocket") {
+      const res = new http.ServerResponse(req);
+      res.assignSocket(socket as import("node:net").Socket);
+      res.on("finish", () => socket.destroy());
+      requestHandler(req, res);
+    }
   });
 
   createWsServer(server, {
