@@ -60,8 +60,13 @@ function extractToken(req: IncomingMessage, url: URL): string | null {
 }
 
 /** Opaque `hst_...` tokens are validated against the Ávimus API instead of decoded locally. */
-async function verifyOpaqueToken(token: string, avimusClient: AvimusClient): Promise<GatewayTokenPayload> {
-  const result = await avimusClient.validateToken(token).catch(() => {
+async function verifyOpaqueToken(
+  token: string,
+  avimusClient: AvimusClient,
+  logger: Logger,
+): Promise<GatewayTokenPayload> {
+  const result = await avimusClient.validateToken(token).catch((err) => {
+    logger.error({ err, token: token.substring(0, 12) }, "opaque token validation failed");
     throw new TokenValidationError(401, "opaque token validation failed");
   });
   if (!result.valid) {
@@ -107,7 +112,7 @@ export function createVerifyClient(deps: HandshakeDeps) {
     let payload: GatewayTokenPayload;
     try {
       payload = token.startsWith(OPAQUE_TOKEN_PREFIX)
-        ? await verifyOpaqueToken(token, deps.avimusClient)
+        ? await verifyOpaqueToken(token, deps.avimusClient, deps.logger)
         : verifyToken(token, deps.jwtSecret);
     } catch (err) {
       const code = err instanceof TokenValidationError ? err.code : 401;
