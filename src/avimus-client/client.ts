@@ -51,7 +51,7 @@ export class AvimusClient {
   /** Validates an opaque `hst_...` token against the Ávimus API. */
   async validateToken(token: string): Promise<TokenValidationResult> {
     const { data } = await this.http.get<TokenValidationResult>("/api/v1/internal/validate-token", {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { "X-Tenant-Token": token },
     });
     return data;
   }
