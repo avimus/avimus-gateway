@@ -7,6 +7,7 @@ function heartbeat(id: string): QueuedMessage {
     messageId: id,
     kind: "heartbeat",
     payload: { tenantId: "hosp-1", version: "1.0.0", timestamp: new Date().toISOString() },
+    tenantToken: "hst_test",
     queuedAt: new Date(),
   };
 }

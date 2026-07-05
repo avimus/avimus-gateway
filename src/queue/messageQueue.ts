@@ -4,6 +4,7 @@ export interface QueuedMessage {
   messageId: string;
   kind: "heartbeat" | "event";
   payload: HeartbeatForward | EventForward;
+  tenantToken: string;
   queuedAt: Date;
 }
 

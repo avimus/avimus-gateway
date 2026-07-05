@@ -40,12 +40,17 @@ export class AvimusClient {
     });
   }
 
-  async sendHeartbeat(payload: HeartbeatForward | OfflineNotification): Promise<void> {
-    await this.http.post("/api/v1/internal/heartbeat", payload);
+  /** `tenantToken` is the hospital's opaque `hst_...` token, forwarded so Avimus can identify the tenant. */
+  async sendHeartbeat(payload: HeartbeatForward | OfflineNotification, tenantToken: string): Promise<void> {
+    await this.http.post("/api/v1/internal/heartbeat", payload, {
+      headers: { "X-Tenant-Token": tenantToken },
+    });
   }
 
-  async sendEvent(payload: EventForward): Promise<void> {
-    await this.http.post("/api/v1/internal/events", payload);
+  async sendEvent(payload: EventForward, tenantToken: string): Promise<void> {
+    await this.http.post("/api/v1/internal/events", payload, {
+      headers: { "X-Tenant-Token": tenantToken },
+    });
   }
 
   /** Validates an opaque `hst_...` token against the Ávimus API. */

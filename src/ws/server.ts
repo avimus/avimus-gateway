@@ -82,7 +82,10 @@ export function createWsServer(httpServer: http.Server, deps: WsServerDeps): Web
       // dropped — a tenant may hold up to 10 concurrent sessions, and one
       // session closing doesn't mean the hospital itself is offline.
       if (deps.registry.countForTenant(connection.tenantId) === 0) {
-        notifyOffline(connection.tenantId, { avimusClient: deps.avimusClient, logger: deps.logger }).catch(
+        notifyOffline(connection.tenantId, connection.jti, {
+          avimusClient: deps.avimusClient,
+          logger: deps.logger,
+        }).catch(
           (err: unknown) => {
             deps.logger.error({ tenantId: connection.tenantId, err }, "unexpected error notifying offline status");
           },

@@ -11,9 +11,13 @@ export interface OfflineNotifierDeps {
  * queued. Unlike heartbeats/events, losing one doesn't corrupt the patient
  * journey — the hospital's next successful heartbeat re-establishes state.
  */
-export async function notifyOffline(tenantId: string, deps: OfflineNotifierDeps): Promise<void> {
+export async function notifyOffline(
+  tenantId: string,
+  tenantToken: string,
+  deps: OfflineNotifierDeps,
+): Promise<void> {
   try {
-    await deps.avimusClient.sendHeartbeat({ tenantId, status: "offline" });
+    await deps.avimusClient.sendHeartbeat({ tenantId, status: "offline" }, tenantToken);
   } catch (err) {
     deps.logger.warn({ tenantId, err }, "failed to notify Avimus of hospital going offline");
   }

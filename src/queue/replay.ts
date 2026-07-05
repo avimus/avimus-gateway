@@ -3,9 +3,9 @@ import type { AvimusClient, HeartbeatForward, EventForward } from "../avimus-cli
 
 async function deliver(message: QueuedMessage, client: AvimusClient): Promise<void> {
   if (message.kind === "heartbeat") {
-    await client.sendHeartbeat(message.payload as HeartbeatForward);
+    await client.sendHeartbeat(message.payload as HeartbeatForward, message.tenantToken);
   } else {
-    await client.sendEvent(message.payload as EventForward);
+    await client.sendEvent(message.payload as EventForward, message.tenantToken);
   }
 }
 
