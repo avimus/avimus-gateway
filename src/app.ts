@@ -35,10 +35,7 @@ export function createApp(config: GatewayConfig): App {
 
   const server = http.createServer(requestHandler);
 
-  // ponytail: debug aid for tracing 403s through SnapDeploy's proxy; remove once the opaque-token rollout is confirmed stable.
   server.on("upgrade", (req, socket) => {
-    logger.info({ method: req.method, url: req.url, headers: req.headers }, "http server: upgrade event received");
-
     // SnapDeploy's health probe sends an opportunistic h2c Upgrade header even on
     // plain GETs. `ws` only reacts to real websocket upgrades on /ws and silently
     // ignores anything else, leaving the socket hanging until the probe times out

@@ -80,11 +80,6 @@ export function createVerifyClient(deps: HandshakeDeps) {
   return async (info: VerifyClientInfo, callback: VerifyClientCallback): Promise<void> => {
     const req = info.req as AuthenticatedRequest;
 
-    deps.logger.info(
-      { method: req.method, url: req.url, headers: req.headers, secure: info.secure },
-      "handshake: request received",
-    );
-
     // ponytail: single chokepoint so every accept/reject path logs the outcome without repeating a log call at each return.
     const finish = (result: boolean, code?: number, message?: string): void => {
       deps.logger.info({ result, code, message }, "handshake: verdict");
