@@ -31,7 +31,7 @@ never sent as part of the initial handshake.
 | `type` | Required fields | Gateway response |
 |---|---|---|
 | `heartbeat` | `version`, `timestamp` | `ack` on successful forward or successful enqueue; `error` if payload malformed |
-| `event` | `erpName`, `eventCode`, `cpf`, `eventDate`, `metadata` | `ack` on successful forward or successful enqueue; `error` if payload malformed |
+| `event` | — | **Refused since 09/11/2026 (D1):** `error`, `retryable: false`. The tunnel carries health only; see `specs/002-connector-rpc/contracts/tunnel.md` for protocol 1.1 (`query.*`) |
 | `auth_refresh` | `token` | `auth_ok` if the new token is valid; `auth_error` (connection closed) if not |
 
 Any `type` not in this table, or a frame that isn't valid JSON, yields:
@@ -62,7 +62,7 @@ and the connection remains open (this is not an auth failure).
 1. Valid token → `auth_ok` is the first frame received.
 2. Expired/invalid/revoked token → HTTP-level rejection with the correct code.
 3. Incompatible major version → HTTP-level rejection with code 403.
-4. `heartbeat` and `event` → `ack` with matching `messageId`.
+4. `heartbeat` → `ack` with matching `messageId`; `event` → `error` (D1).
 5. Malformed frame → `error` with `retryable`, connection stays open.
 6. `auth_refresh` with a valid new token → `auth_ok`, connection stays open.
 7. `auth_refresh` with an invalid token → `auth_error`, connection closes.

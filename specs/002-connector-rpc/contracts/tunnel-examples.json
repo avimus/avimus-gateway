@@ -1,0 +1,14 @@
+{
+  "valid": {
+    "heartbeat": {"type": "heartbeat", "version": "1.1.0", "timestamp": "2026-11-09T18:00:00.000Z"},
+    "query.request": {"type": "query.request", "requestId": "6f1c2a9e-3b7d-4c55-9a0e-2d1f8b7c6e54", "sistema": "shift", "consulta": "eventos", "params": {"desde": "2026-11-09T14:00:00", "limite": "1000"}, "timeoutMs": 30000},
+    "query.response": {"type": "query.response", "requestId": "6f1c2a9e-3b7d-4c55-9a0e-2d1f8b7c6e54", "page": 0, "last": true, "truncado": false, "duracaoMs": 42, "dados": [{"source_key": 1, "status": "PE", "alterado_em": "2026-11-09 14:00:01.400000"}]},
+    "query.error": {"type": "query.error", "requestId": "6f1c2a9e-3b7d-4c55-9a0e-2d1f8b7c6e54", "code": "shift_db_timeout", "status": 504}
+  },
+  "invalid": {
+    "event": {"type": "event", "erpName": "tasy", "eventCode": "X", "cpf": "00000000191", "eventDate": "2026-11-09", "metadata": {}},
+    "query.error com texto livre": {"type": "query.error", "requestId": "6f1c2a9e-3b7d-4c55-9a0e-2d1f8b7c6e54", "code": "ORA-00942: table or view does not exist", "status": 502},
+    "query.response sem requestId": {"type": "query.response", "page": 0, "last": true, "truncado": false, "duracaoMs": 1, "dados": []},
+    "query.response com página negativa": {"type": "query.response", "requestId": "6f1c2a9e-3b7d-4c55-9a0e-2d1f8b7c6e54", "page": -1, "last": true, "truncado": false, "duracaoMs": 1, "dados": []}
+  }
+}

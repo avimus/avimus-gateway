@@ -42,7 +42,7 @@ test("heartbeat message is forwarded and acked", async () => {
   }
 });
 
-test("event message is forwarded (unmasked) and acked", async () => {
+test("event message is refused (D1: health only) and nothing reaches Ávimus", async () => {
   const { avimus, running } = await setup();
   try {
     const token = makeToken(SECRET);
@@ -57,10 +57,12 @@ test("event message is forwarded (unmasked) and acked", async () => {
         metadata: { bed: "302B" },
       }),
     );
-    const ack = await collector.next();
-    assert.equal(ack.type, "ack");
-    assert.equal(avimus.events.length, 1);
-    assert.equal(avimus.events[0]?.cpf, "12345678900");
+    const error = await collector.next();
+    assert.equal(error.type, "error");
+    assert.equal(error.retryable, false);
+    assert.match(String(error.reason), /health only/);
+    assert.equal(avimus.events.length, 0);
+    assert.equal(ws.readyState, WebSocket.OPEN);
     ws.close();
   } finally {
     await running.close();

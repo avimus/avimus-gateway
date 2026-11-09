@@ -8,7 +8,7 @@ import { waitForOpenOrClose, MessageCollector } from "../helpers/wsClient";
 
 const SECRET = "test-secret";
 
-test("US1 golden path: connect, stream heartbeat + event, get acked", async () => {
+test("US1 golden path: connect, stream heartbeat, get acked (event refused, D1)", async () => {
   const avimus = await startStubAvimusApi();
   const running = await startTestApp(
     buildTestConfig({ GATEWAY_JWT_SECRET: SECRET, AVIMUS_API_URL: avimus.baseUrl }),
@@ -34,21 +34,11 @@ test("US1 golden path: connect, stream heartbeat + event, get acked", async () =
     assert.equal(avimus.heartbeats[0]?.tenantId, "hosp-golden");
     assert.equal(avimus.heartbeats[0]?.timestamp, heartbeatTs);
 
-    // 3. Clinical event is forwarded and acked.
-    ws.send(
-      JSON.stringify({
-        type: "event",
-        erpName: "tasy",
-        eventCode: "PATIENT_ADMITTED",
-        cpf: "12345678900",
-        eventDate: new Date().toISOString(),
-        metadata: { bed: "302B", unit: "UTI" },
-      }),
-    );
-    const eventAck = await collector.next();
-    assert.equal(eventAck.type, "ack");
-    assert.equal(avimus.events.length, 1);
-    assert.equal(avimus.events[0]?.eventCode, "PATIENT_ADMITTED");
+    // 3. Clinical events no longer travel the tunnel (D1): refused, nothing forwarded.
+    ws.send(JSON.stringify({ type: "event", erpName: "tasy", eventCode: "PATIENT_ADMITTED", cpf: "12345678900", eventDate: new Date().toISOString(), metadata: {} }));
+    const refused = await collector.next();
+    assert.equal(refused.type, "error");
+    assert.equal(avimus.events.length, 0);
 
     ws.close();
   } finally {

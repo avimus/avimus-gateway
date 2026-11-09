@@ -1,12 +1,8 @@
 import type { MessageQueue, QueuedMessage } from "./messageQueue";
-import type { AvimusClient, HeartbeatForward, EventForward } from "../avimus-client/client";
+import type { AvimusClient } from "../avimus-client/client";
 
 async function deliver(message: QueuedMessage, client: AvimusClient): Promise<void> {
-  if (message.kind === "heartbeat") {
-    await client.sendHeartbeat(message.payload as HeartbeatForward, message.tenantToken);
-  } else {
-    await client.sendEvent(message.payload as EventForward, message.tenantToken);
-  }
+  await client.sendHeartbeat(message.payload, message.tenantToken);
 }
 
 /**

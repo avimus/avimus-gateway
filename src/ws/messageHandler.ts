@@ -4,7 +4,6 @@ import { sendMessage } from "./protocol";
 import type { HospitalConnection } from "./connectionRegistry";
 import type { AvimusClient } from "../avimus-client/client";
 import type { Logger } from "../logging/logger";
-import { maskCpf } from "../logging/maskCpf";
 import type { MessageQueue, QueuedMessage } from "../queue/messageQueue";
 import { flushQueue } from "../queue/replay";
 
@@ -14,7 +13,7 @@ export interface MessageHandlerDeps {
   queue: MessageQueue;
 }
 
-type ApplicationMessage = Extract<InboundMessage, { type: "heartbeat" | "event" }>;
+type ApplicationMessage = Extract<InboundMessage, { type: "heartbeat" }>;
 
 function toQueuedMessage(
   messageId: string,
@@ -22,26 +21,10 @@ function toQueuedMessage(
   tenantToken: string,
   message: ApplicationMessage,
 ): QueuedMessage {
-  if (message.type === "heartbeat") {
-    return {
-      messageId,
-      kind: "heartbeat",
-      payload: { tenantId, version: message.version, timestamp: message.timestamp },
-      tenantToken,
-      queuedAt: new Date(),
-    };
-  }
   return {
     messageId,
-    kind: "event",
-    payload: {
-      tenantId,
-      erpName: message.erpName,
-      eventCode: message.eventCode,
-      cpf: message.cpf,
-      eventDate: message.eventDate,
-      metadata: message.metadata,
-    },
+    kind: "heartbeat",
+    payload: { tenantId, version: message.version, timestamp: message.timestamp },
     tenantToken,
     queuedAt: new Date(),
   };
@@ -53,36 +36,13 @@ async function deliverLive(
   message: ApplicationMessage,
   deps: MessageHandlerDeps,
 ): Promise<void> {
-  if (message.type === "heartbeat") {
-    await deps.avimusClient.sendHeartbeat(
-      {
-        tenantId,
-        version: message.version,
-        timestamp: message.timestamp,
-      },
-      tenantToken,
-    );
-    return;
-  }
-  deps.logger.info(
-    { tenantId, eventCode: message.eventCode, cpf: maskCpf(message.cpf) },
-    "forwarding event",
-  );
-  // The CPF forwarded to Avimus stays unmasked — masking only applies to log output (FR-014).
-  await deps.avimusClient.sendEvent(
-    {
-      tenantId,
-      erpName: message.erpName,
-      eventCode: message.eventCode,
-      cpf: message.cpf,
-      eventDate: message.eventDate,
-      metadata: message.metadata,
-    },
+  await deps.avimusClient.sendHeartbeat(
+    { tenantId, version: message.version, timestamp: message.timestamp },
     tenantToken,
   );
 }
 
-/** Handles `heartbeat` and `event` messages: forward to Ávimus, then ack or error. */
+/** Handles `heartbeat` messages (health only, D1): forward to Ávimus, then ack. */
 export async function handleApplicationMessage(
   connection: HospitalConnection,
   message: ApplicationMessage,

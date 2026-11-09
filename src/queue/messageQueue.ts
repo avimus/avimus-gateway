@@ -1,9 +1,9 @@
-import type { HeartbeatForward, EventForward } from "../avimus-client/client";
+import type { HeartbeatForward } from "../avimus-client/client";
 
 export interface QueuedMessage {
   messageId: string;
-  kind: "heartbeat" | "event";
-  payload: HeartbeatForward | EventForward;
+  kind: "heartbeat";
+  payload: HeartbeatForward;
   tenantToken: string;
   queuedAt: Date;
 }

@@ -6,15 +6,6 @@ export interface HeartbeatForward {
   timestamp: string;
 }
 
-export interface EventForward {
-  tenantId: string;
-  erpName: string;
-  eventCode: string;
-  cpf: string;
-  eventDate: string;
-  metadata: Record<string, unknown>;
-}
-
 export interface OfflineNotification {
   tenantId: string;
   status: "offline";
@@ -43,12 +34,6 @@ export class AvimusClient {
   /** `tenantToken` is the hospital's opaque `hst_...` token, forwarded so Avimus can identify the tenant. */
   async sendHeartbeat(payload: HeartbeatForward | OfflineNotification, tenantToken: string): Promise<void> {
     await this.http.post("/api/v1/internal/heartbeat", payload, {
-      headers: { "X-Tenant-Token": tenantToken },
-    });
-  }
-
-  async sendEvent(payload: EventForward, tenantToken: string): Promise<void> {
-    await this.http.post("/api/v1/internal/events", payload, {
       headers: { "X-Tenant-Token": tenantToken },
     });
   }

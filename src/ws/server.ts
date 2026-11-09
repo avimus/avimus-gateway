@@ -119,6 +119,13 @@ async function handleRawMessage(
     return;
   }
 
+  if (message.type === "query.response" || message.type === "query.error") {
+    // Phase 6 routes these to the pending POST /internal/rpc/query; until then a reply with no pending
+    // request is dropped, exactly as the contract says for an unknown requestId.
+    deps.logger.debug({ tenantId: connection.tenantId, requestId: message.requestId, type: message.type }, "rpc reply without pending request");
+    return;
+  }
+
   await handleApplicationMessage(connection, message, {
     avimusClient: deps.avimusClient,
     logger: deps.logger,
