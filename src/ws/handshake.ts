@@ -72,7 +72,10 @@ async function verifyOpaqueToken(
   if (!result.valid) {
     throw new TokenValidationError(401, "invalid opaque token");
   }
-  return { tenantId: result.tenantId, erpName: result.erpName, label: result.erpName, jti: token, iat: 0, exp: 0 };
+  // The Ávimus answers { valid, tenantId } (no erpName). The connector's label is then its token prefix
+  // ("hst_" + 8), the same one the Ávimus admin shows; the worker addresses it as gateway://<tenant>/<prefix>.
+  const label = result.erpName || token.slice(0, OPAQUE_TOKEN_PREFIX.length + 8);
+  return { tenantId: result.tenantId, erpName: result.erpName || "conector", label, jti: token, iat: 0, exp: 0 };
 }
 
 /** Builds the `verifyClient` hook for `ws.WebSocketServer`: rejects before upgrade on any auth failure. */

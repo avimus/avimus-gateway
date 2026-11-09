@@ -6,6 +6,8 @@ import type { RevocationList } from "../auth/revocationList";
 import { handleHealth } from "./health";
 import { handleMetrics } from "./metrics";
 import { handleRevoke } from "./revoke";
+import { handleRpcQuery } from "./rpcQuery";
+import type { RpcBroker } from "../rpc/rpcBroker";
 
 export interface HttpRouterDeps {
   registry: ConnectionRegistry;
@@ -13,6 +15,8 @@ export interface HttpRouterDeps {
   revocationList: RevocationList;
   internalSecret: string;
   logger: Logger;
+  broker: RpcBroker;
+  rpcSecret: string;
 }
 
 export function createRequestHandler(deps: HttpRouterDeps): (req: IncomingMessage, res: ServerResponse) => void {
@@ -40,6 +44,17 @@ export function createRequestHandler(deps: HttpRouterDeps): (req: IncomingMessag
         registry: deps.registry,
         internalSecret: deps.internalSecret,
         logger: deps.logger,
+      });
+      return;
+    }
+
+    if (req.method === "POST" && path === "/internal/rpc/query") {
+      handleRpcQuery(req, res, { broker: deps.broker, rpcSecret: deps.rpcSecret }).catch((err: unknown) => {
+        deps.logger.error({ err: (err as Error).name }, "rpc query handler failed");
+        if (!res.headersSent) {
+          res.statusCode = 500;
+          res.end();
+        }
       });
       return;
     }

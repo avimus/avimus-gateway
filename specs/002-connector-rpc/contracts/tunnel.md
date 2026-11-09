@@ -22,6 +22,10 @@ lá. O gateway e o worker nunca mandam SQL.
 `wss://<gateway>/ws?version=1.1.0`, com `Authorization: Bearer hst_…`. O token é validado na Ávimus
 (`/api/v1/internal/validate-token`). O primeiro quadro é `auth_ok`. Os tipos são **sempre em minúsculas**.
 
+**Rótulo do conector (`connectorLabel`):** a Ávimus responde `{ valid, tenantId }`; o rótulo é então o prefixo do
+token (`hst_` + 8 caracteres, o mesmo que o admin da Ávimus mostra). No worker, a conexão aponta
+`gateway://<tenantId da Ávimus>/<prefixo do token>`.
+
 ## Quadros
 
 | `type` | Sentido | Campos | Observação |
