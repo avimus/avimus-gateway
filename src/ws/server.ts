@@ -126,7 +126,7 @@ async function handleRawMessage(
 
   if (message.type === "query.response" || message.type === "query.error") {
     connection.lastActivityAt = new Date();
-    deps.broker?.onFrame(connection, message);
+    deps.broker?.onFrame(connection, message, Buffer.byteLength(raw));
     return;
   }
 

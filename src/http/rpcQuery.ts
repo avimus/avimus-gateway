@@ -25,14 +25,18 @@ function authorized(req: IncomingMessage, secret: string): boolean {
 
 function readLimited(req: IncomingMessage): Promise<string | null> {
   return new Promise((resolve, reject) => {
-    let raw = "";
-    let tooBig = false;
+    const chunks: Buffer[] = [];
+    let size = 0;
     req.on("data", (chunk: Buffer) => {
-      if (tooBig) return;
-      raw += chunk;
-      if (raw.length > MAX_BODY_BYTES) tooBig = true;
+      size += chunk.byteLength;
+      if (size > MAX_BODY_BYTES) {
+        resolve(null);
+        req.pause();
+        return;
+      }
+      chunks.push(chunk);
     });
-    req.on("end", () => resolve(tooBig ? null : raw));
+    req.on("end", () => resolve(size > MAX_BODY_BYTES ? null : Buffer.concat(chunks).toString("utf8")));
     req.on("error", reject);
   });
 }

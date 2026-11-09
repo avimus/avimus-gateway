@@ -65,8 +65,9 @@ async function verifyOpaqueToken(
   avimusClient: AvimusClient,
   logger: Logger,
 ): Promise<GatewayTokenPayload> {
-  const result = await avimusClient.validateToken(token).catch((err) => {
-    logger.error({ err, token: token.substring(0, 12) }, "opaque token validation failed");
+  const result = await avimusClient.validateToken(token).catch((err: { code?: string; response?: { status?: number } }) => {
+    // Never the axios error object: its config carries X-Tenant-Token and x-internal-secret.
+    logger.error({ code: err?.code, status: err?.response?.status, token: token.substring(0, 12) }, "opaque token validation failed");
     throw new TokenValidationError(401, "opaque token validation failed");
   });
   if (!result.valid) {
@@ -74,7 +75,9 @@ async function verifyOpaqueToken(
   }
   // The Ávimus answers { valid, tenantId } (no erpName). The connector's label is then its token prefix
   // ("hst_" + 8), the same one the Ávimus admin shows; the worker addresses it as gateway://<tenant>/<prefix>.
-  const label = result.erpName || token.slice(0, OPAQUE_TOKEN_PREFIX.length + 8);
+  // Always the prefix, even if the Ávimus one day returns erpName: two connectors of one tenant (two SGU units)
+  // must never share a label, or a request could be answered by the other unit's database.
+  const label = token.slice(0, OPAQUE_TOKEN_PREFIX.length + 8);
   return { tenantId: result.tenantId, erpName: result.erpName || "conector", label, jti: token, iat: 0, exp: 0 };
 }
 

@@ -166,3 +166,39 @@ test("rpc: hst_ connector (real Ávimus answer has no erpName) is addressed by i
     await avimus.close();
   }
 });
+
+test("rpc: label is the token prefix even when the Ávimus returns erpName (two units never share a label)", async () => {
+  const { avimus, running } = await setup();
+  try {
+    (avimus as unknown as { validateTokenResponse: unknown }).validateTokenResponse = { valid: true, tenantId: "tenant-avimus-1", erpName: "sgu" };
+    const ws = new WebSocket(running.wsUrl, { headers: { authorization: `Bearer hst_ffff0000${"a".repeat(40)}` } });
+    const frames = new MessageCollector(ws);
+    await waitForOpenOrClose(ws);
+    await frames.next();
+    const porErp = await ask(running, body({ tenantId: "tenant-avimus-1", connectorLabel: "sgu" }));
+    assert.deepEqual(await porErp.json(), { detail: "connector_offline" });
+    const pending = ask(running, body({ tenantId: "tenant-avimus-1", connectorLabel: "hst_ffff0000" }));
+    const req = await frames.next();
+    ws.send(JSON.stringify({ type: "query.error", requestId: req.requestId, code: "sgu_db_ocupado", status: 503 }));
+    assert.equal((await pending).status, 503);
+    ws.close();
+  } finally {
+    await running.close();
+    await avimus.close();
+  }
+});
+
+test("rpc: more rows than the cap (memory grows with rows, not bytes) → 502 resposta_grande_demais", async () => {
+  await withApp(async (running) => {
+    const { ws, frames } = await connector(running);
+    const pending = ask(running, body());
+    const req = await frames.next();
+    const rows = Array.from({ length: 6000 }, () => ({}));
+    ws.send(JSON.stringify({ type: "query.response", requestId: req.requestId, page: 0, last: false, truncado: false, duracaoMs: 0, dados: rows }));
+    ws.send(JSON.stringify({ type: "query.response", requestId: req.requestId, page: 1, last: true, truncado: false, duracaoMs: 0, dados: rows }));
+    const r = await pending;
+    assert.equal(r.status, 502);
+    assert.deepEqual(await r.json(), { detail: "shift_resposta_grande_demais" });
+    ws.close();
+  });
+});

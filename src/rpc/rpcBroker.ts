@@ -9,6 +9,10 @@ import type { Logger } from "../logging/logger";
 
 export const MAX_PENDING_PER_CONNECTION = 4;
 export const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+// Memory grows with rows, not only bytes ({} is 3 bytes): bound rows, pages and pending requests too.
+export const MAX_RESPONSE_ROWS = 10_000;
+export const MAX_RESPONSE_PAGES = 100;
+export const MAX_PENDING_TOTAL = 200;
 const DEADLINE_GRACE_MS = 1000;
 
 export interface RpcRequest {
@@ -55,6 +59,10 @@ export class RpcBroker {
       .filter((c) => c.label === request.connectorLabel && c.socket.readyState === WebSocket.OPEN)
       .sort((a, b) => b.lastActivityAt.getTime() - a.lastActivityAt.getTime());
     const connection = candidates.find((c) => this.inFlight(c) < MAX_PENDING_PER_CONNECTION);
+    if (connection && this.pending.size >= MAX_PENDING_TOTAL) {
+      this.log(request, undefined, 503, "gateway_busy", 0);
+      return Promise.resolve(fail(503, "gateway_busy"));
+    }
     if (!connection) {
       const code = candidates.length ? "connector_busy" : "connector_offline";
       this.log(request, undefined, 503, code, 0);
@@ -87,7 +95,7 @@ export class RpcBroker {
   }
 
   /** A reply only counts from the very connection that got the request (another tenant's connector can't answer). */
-  onFrame(connection: HospitalConnection, frame: ResponseFrame | ErrorFrame): void {
+  onFrame(connection: HospitalConnection, frame: ResponseFrame | ErrorFrame, frameBytes = 0): void {
     const entry = this.pending.get(frame.requestId);
     if (!entry || entry.connection !== connection) {
       this.logger.debug({ tenantId: connection.tenantId, requestId: frame.requestId }, "rpc reply without pending request");
@@ -102,8 +110,8 @@ export class RpcBroker {
       return;
     }
     entry.nextPage++;
-    entry.bytes += Buffer.byteLength(JSON.stringify(frame.dados));
-    if (entry.bytes > MAX_RESPONSE_BYTES) {
+    entry.bytes += frameBytes;
+    if (entry.bytes > MAX_RESPONSE_BYTES || entry.rows.length + frame.dados.length > MAX_RESPONSE_ROWS || entry.nextPage > MAX_RESPONSE_PAGES) {
       entry.finish(fail(502, `${entry.request.sistema}_resposta_grande_demais`));
       return;
     }
