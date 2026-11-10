@@ -7,6 +7,7 @@ import { AvimusClient } from "./avimus-client/client";
 import { createWsServer } from "./ws/server";
 import { MessageQueue } from "./queue/messageQueue";
 import { createRequestHandler } from "./http/server";
+import { RpcBroker } from "./rpc/rpcBroker";
 
 export interface App {
   server: http.Server;
@@ -15,6 +16,7 @@ export interface App {
   revocationList: RevocationList;
   avimusClient: AvimusClient;
   queue: MessageQueue;
+  broker: RpcBroker;
 }
 
 /** Composition root: wires config into the HTTP+WS server, without starting it. */
@@ -24,6 +26,7 @@ export function createApp(config: GatewayConfig): App {
   const registry = new ConnectionRegistry();
   const avimusClient = new AvimusClient(config.avimusApiUrl, config.avimusInternalSecret);
   const queue = new MessageQueue(config.maxQueuePerTenant);
+  const broker = new RpcBroker(registry, logger);
 
   const requestHandler = createRequestHandler({
     registry,
@@ -31,6 +34,8 @@ export function createApp(config: GatewayConfig): App {
     revocationList,
     internalSecret: config.avimusInternalSecret,
     logger,
+    broker,
+    rpcSecret: config.rpcSecret,
   });
 
   const server = http.createServer(requestHandler);
@@ -57,7 +62,8 @@ export function createApp(config: GatewayConfig): App {
     avimusClient,
     logger,
     queue,
+    broker,
   });
 
-  return { server, logger, registry, revocationList, avimusClient, queue };
+  return { server, logger, registry, revocationList, avimusClient, queue, broker };
 }

@@ -11,6 +11,7 @@ import type { AvimusClient } from "../avimus-client/client";
 import type { Logger } from "../logging/logger";
 import type { MessageQueue } from "../queue/messageQueue";
 import { notifyOffline } from "../avimus-client/offlineNotifier";
+import type { RpcBroker } from "../rpc/rpcBroker";
 
 export interface WsServerDeps {
   jwtSecret: string;
@@ -20,12 +21,15 @@ export interface WsServerDeps {
   avimusClient: AvimusClient;
   logger: Logger;
   queue: MessageQueue;
+  broker?: RpcBroker;
 }
 
 export function createWsServer(httpServer: http.Server, deps: WsServerDeps): WebSocketServer {
   const wss = new WebSocketServer({
     server: httpServer,
     path: "/ws",
+    // Contract: a query.response frame has at most 256 KiB of rows; anything far above that is refused.
+    maxPayload: 512 * 1024,
     verifyClient: createVerifyClient({
       jwtSecret: deps.jwtSecret,
       revocationList: deps.revocationList,
@@ -78,6 +82,7 @@ export function createWsServer(httpServer: http.Server, deps: WsServerDeps): Web
 
     socket.on("close", () => {
       deps.registry.remove(connection);
+      deps.broker?.onClose(connection);
       // Only report "offline" once every connection for this tenant has
       // dropped — a tenant may hold up to 10 concurrent sessions, and one
       // session closing doesn't mean the hospital itself is offline.
@@ -116,6 +121,12 @@ async function handleRawMessage(
       jwtSecret: deps.jwtSecret,
       revocationList: deps.revocationList,
     });
+    return;
+  }
+
+  if (message.type === "query.response" || message.type === "query.error") {
+    connection.lastActivityAt = new Date();
+    deps.broker?.onFrame(connection, message, Buffer.byteLength(raw));
     return;
   }
 
