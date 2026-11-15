@@ -36,3 +36,26 @@ test("repassa o hst_ e o pedido de credencial; devolve o corpo da Ávimus", asyn
   assert.equal(JSON.parse(res.body).desiredVersion, "v1.2.0");
   assert.equal(res.headers["Cache-Control"], "no-store");
 });
+
+import { Readable } from "node:stream";
+import { handleConnectorEvent } from "../../src/http/connectorUpdate";
+
+const post = (auth: string, body: string) => {
+  const r = Readable.from([Buffer.from(body)]) as unknown as IncomingMessage;
+  (r as unknown as { headers: object }).headers = { authorization: auth, "content-length": String(body.length) };
+  return r;
+};
+
+test("evento: só formato fixo passa; repassa à Ávimus", async () => {
+  const seen: unknown[] = [];
+  const client = { sendConnectorEvent: async (t: string, m: unknown) => { seen.push([t, m]); } } as unknown as AvimusClient;
+  const ok = fakeRes();
+  await handleConnectorEvent(post("Bearer hst_abcdefghijkl", JSON.stringify({ resultado: "falhou", versao: "v1.2.1", motivo: "assinatura inválida ou ausente" })), ok as unknown as ServerResponse, { avimusClient: client, logger });
+  assert.equal(ok.statusCode, 202);
+  for (const bad of [{ resultado: "x", versao: "v1.2.1" }, { resultado: "ok", versao: "1.2" }, { resultado: "ok", versao: "v1.2.1", motivo: "<script>" }]) {
+    const res = fakeRes();
+    await handleConnectorEvent(post("Bearer hst_abcdefghijkl", JSON.stringify(bad)), res as unknown as ServerResponse, { avimusClient: client, logger });
+    assert.equal(res.statusCode, 400);
+  }
+  assert.equal(seen.length, 1);
+});
