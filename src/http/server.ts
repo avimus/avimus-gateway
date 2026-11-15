@@ -8,6 +8,8 @@ import { handleMetrics } from "./metrics";
 import { handleRevoke } from "./revoke";
 import { handleRpcQuery } from "./rpcQuery";
 import type { RpcBroker } from "../rpc/rpcBroker";
+import type { AvimusClient } from "../avimus-client/client";
+import { handleConnectorUpdate } from "./connectorUpdate";
 
 export interface HttpRouterDeps {
   registry: ConnectionRegistry;
@@ -17,6 +19,7 @@ export interface HttpRouterDeps {
   logger: Logger;
   broker: RpcBroker;
   rpcSecret: string;
+  avimusClient: AvimusClient;
 }
 
 export function createRequestHandler(deps: HttpRouterDeps): (req: IncomingMessage, res: ServerResponse) => void {
@@ -56,6 +59,11 @@ export function createRequestHandler(deps: HttpRouterDeps): (req: IncomingMessag
           res.end();
         }
       });
+      return;
+    }
+
+    if (req.method === "GET" && path === "/conector/atualizacao") {
+      void handleConnectorUpdate(req, res, { avimusClient: deps.avimusClient, logger: deps.logger });
       return;
     }
 

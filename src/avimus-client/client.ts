@@ -38,6 +38,18 @@ export class AvimusClient {
     });
   }
 
+  /**
+   * Versão desejada do conector deste hospital (e, com `withCredential`, a credencial de leitura do
+   * registro). Devolve o corpo da Ávimus como veio; o tenant sai do próprio hst_.
+   */
+  async getConnectorUpdate(tenantToken: string, withCredential: boolean): Promise<unknown> {
+    const { data } = await this.http.get("/api/v1/internal/conector/atualizacao", {
+      headers: { "X-Tenant-Token": tenantToken },
+      params: withCredential ? { credencial: "1" } : undefined,
+    });
+    return data;
+  }
+
   /** Validates an opaque `hst_...` token against the Ávimus API. */
   async validateToken(token: string): Promise<TokenValidationResult> {
     const { data } = await this.http.get<TokenValidationResult>("/api/v1/internal/validate-token", {

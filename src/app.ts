@@ -36,6 +36,7 @@ export function createApp(config: GatewayConfig): App {
     logger,
     broker,
     rpcSecret: config.rpcSecret,
+    avimusClient,
   });
 
   const server = http.createServer(requestHandler);
