@@ -50,6 +50,16 @@ export class AvimusClient {
     return data;
   }
 
+  /** Resultado de uma tentativa do atualizador do conector, gravado como evento do tenant. */
+  async sendConnectorEvent(
+    tenantToken: string,
+    metadata: { resultado: string; versao: string; motivo?: string },
+  ): Promise<void> {
+    await this.http.post("/api/v1/internal/events", { eventType: "conector_atualizacao", metadata }, {
+      headers: { "X-Tenant-Token": tenantToken },
+    });
+  }
+
   /** Validates an opaque `hst_...` token against the Ávimus API. */
   async validateToken(token: string): Promise<TokenValidationResult> {
     const { data } = await this.http.get<TokenValidationResult>("/api/v1/internal/validate-token", {
