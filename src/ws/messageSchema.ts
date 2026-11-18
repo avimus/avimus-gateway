@@ -9,13 +9,19 @@ export type InboundMessage =
       truncado: boolean;
       duracaoMs: number;
       dados: Record<string, unknown>[];
+      /** dosql (spec 027): column order of the SELECT, on the last page. */
+      colunas?: string[];
     }
-  | { type: "query.error"; requestId: string; code: string; status: number };
+  /** `mensagem`: dosql only, database text for the admin screen; never logged (it can carry patient data). */
+  | { type: "query.error"; requestId: string; code: string; status: number; mensagem?: string };
 
 // Contract: specs/002-connector-rpc/contracts/tunnel.md
 const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const SAFE_CODE = /^[a-z][a-z0-9_:]{0,60}$/;
-const ERROR_STATUSES = new Set([404, 422, 502, 503, 504]);
+// 403 (dosql off/expired) and 409 (dosql busy): spec 027.
+const ERROR_STATUSES = new Set([403, 404, 409, 422, 502, 503, 504]);
+const MAX_COLUNAS = 500;
+const MAX_MENSAGEM = 300;
 const isNonNegativeInt = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
 
 export class MessageValidationError extends Error {
@@ -63,9 +69,15 @@ export function parseInboundMessage(raw: string): InboundMessage {
           !msg.dados.every((row) => typeof row === "object" && row !== null && !Array.isArray(row))) {
         throw new MessageValidationError("query.response requires page, last, truncado, duracaoMs and dados rows");
       }
+      const colunas = msg.colunas;
+      if (colunas !== undefined && !(Array.isArray(colunas) && colunas.length <= MAX_COLUNAS &&
+          colunas.every((c) => typeof c === "string" && c.length > 0 && c.length <= 128))) {
+        throw new MessageValidationError("query.response colunas must be up to 500 short strings");
+      }
       return {
         type: "query.response", requestId: msg.requestId, page: msg.page, last: msg.last,
         truncado: msg.truncado, duracaoMs: msg.duracaoMs, dados: msg.dados as Record<string, unknown>[],
+        ...(colunas ? { colunas: colunas as string[] } : {}),
       };
     }
     case "query.error": {
@@ -76,7 +88,14 @@ export function parseInboundMessage(raw: string): InboundMessage {
       if (typeof msg.code !== "string" || !SAFE_CODE.test(msg.code) || typeof msg.status !== "number" || !ERROR_STATUSES.has(msg.status)) {
         throw new MessageValidationError("query.error requires a safe code and a known status");
       }
-      return { type: "query.error", requestId: msg.requestId, code: msg.code, status: msg.status };
+      const mensagem = msg.mensagem;
+      if (mensagem !== undefined && !(typeof mensagem === "string" && mensagem.length <= MAX_MENSAGEM)) {
+        throw new MessageValidationError("query.error mensagem must be a string up to 300 characters");
+      }
+      return {
+        type: "query.error", requestId: msg.requestId, code: msg.code, status: msg.status,
+        ...(mensagem ? { mensagem } : {}),
+      };
     }
     default:
       throw new MessageValidationError(`unrecognized message type: ${String(msg.type)}`);
