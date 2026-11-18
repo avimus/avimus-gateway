@@ -33,6 +33,9 @@ test("parseInboundMessage: colunas, mensagem and 403/409 are accepted and bounde
     assert.equal(e.type === "query.error" && e.mensagem, "x");
   }
   assert.throws(() => parseInboundMessage(JSON.stringify({ type: "query.error", requestId, code: "x", status: 502, mensagem: "x".repeat(301) })));
+  // 300 emojis = 300 characters for the connector (Python), 600 UTF-16 units in JS: still accepted.
+  const emoji = parseInboundMessage(JSON.stringify({ type: "query.error", requestId, code: "x", status: 502, mensagem: "😀".repeat(300) }));
+  assert.equal(emoji.type === "query.error" && [...(emoji.mensagem ?? "")].length, 300);
   assert.throws(() => parseInboundMessage(JSON.stringify({ type: "query.response", requestId, page: 0, last: true, truncado: false, duracaoMs: 1, dados: [], colunas: [1] })));
 });
 
