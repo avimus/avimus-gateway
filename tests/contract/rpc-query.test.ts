@@ -86,6 +86,20 @@ test("rpc: request reaches the connector; pages are joined in the connector API 
   });
 });
 
+test("rpc: dosql (spec 027) carries sql to the connector; 409 with mensagem comes back through the real WS server", async () => {
+  await withApp(async (running) => {
+    const { ws, frames } = await connector(running);
+    const pending = ask(running, body({ consulta: "dosql", params: {}, sql: "SELECT 1 FROM dual" }));
+    const req = await frames.next();
+    assert.equal(req.sql, "SELECT 1 FROM dual");
+    ws.send(JSON.stringify({ type: "query.error", requestId: req.requestId, code: "dosql_ocupado", status: 409, mensagem: "x" }));
+    const r = await pending;
+    assert.equal(r.status, 409);
+    assert.deepEqual(await r.json(), { detail: "dosql_ocupado", mensagem: "x" });
+    ws.close();
+  });
+});
+
 test("rpc: query.error passes its safe code and status through", async () => {
   await withApp(async (running) => {
     const { ws, frames } = await connector(running);

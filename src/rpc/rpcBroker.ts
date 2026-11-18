@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import WebSocket from "ws";
 import type { ConnectionRegistry, HospitalConnection } from "../ws/connectionRegistry";
 import type { Logger } from "../logging/logger";
+import type { InboundMessage } from "../ws/messageSchema";
 
 // Request/response over the tunnel (contract: specs/002-connector-rpc/contracts/tunnel.md).
 // No queue: if the connector is gone, the worker retries next cycle. Logs carry ids and codes only,
@@ -22,14 +23,16 @@ export interface RpcRequest {
   consulta: string;
   params: Record<string, string>;
   timeoutMs: number;
+  /** dosql (spec 027): only with consulta "dosql"; never logged. */
+  sql?: string;
 }
 
 export type RpcResult =
-  | { status: 200; body: { sistema: string; consulta: string; quantidade: number; truncado: boolean; duracao_ms: number; dados: Record<string, unknown>[] } }
-  | { status: number; body: { detail: string } };
+  | { status: 200; body: { sistema: string; consulta: string; quantidade: number; truncado: boolean; duracao_ms: number; dados: Record<string, unknown>[]; colunas?: string[] } }
+  | { status: number; body: { detail: string; mensagem?: string } };
 
-type ResponseFrame = { type: "query.response"; requestId: string; page: number; last: boolean; truncado: boolean; duracaoMs: number; dados: Record<string, unknown>[] };
-type ErrorFrame = { type: "query.error"; requestId: string; code: string; status: number };
+type ResponseFrame = Extract<InboundMessage, { type: "query.response" }>;
+type ErrorFrame = Extract<InboundMessage, { type: "query.error" }>;
 
 interface Pending {
   request: RpcRequest;
@@ -86,7 +89,7 @@ export class RpcBroker {
       try {
         connection.socket.send(JSON.stringify({
           type: "query.request", requestId, sistema: request.sistema, consulta: request.consulta,
-          params: request.params, timeoutMs: request.timeoutMs,
+          params: request.params, timeoutMs: request.timeoutMs, ...(request.sql ? { sql: request.sql } : {}),
         }));
       } catch {
         finish(fail(503, "connector_offline"));
@@ -102,7 +105,8 @@ export class RpcBroker {
       return;
     }
     if (frame.type === "query.error") {
-      entry.finish(fail(frame.status, frame.code));
+      // `mensagem` goes to the worker in the body only: `log` reads `detail`, never the body's other fields.
+      entry.finish(frame.mensagem ? { status: frame.status, body: { detail: frame.code, mensagem: frame.mensagem } } : fail(frame.status, frame.code));
       return;
     }
     if (frame.page !== entry.nextPage) {
@@ -122,6 +126,7 @@ export class RpcBroker {
         body: {
           sistema: entry.request.sistema, consulta: entry.request.consulta, quantidade: entry.rows.length,
           truncado: frame.truncado, duracao_ms: frame.duracaoMs, dados: entry.rows,
+          ...(frame.colunas ? { colunas: frame.colunas } : {}),
         },
       });
     }

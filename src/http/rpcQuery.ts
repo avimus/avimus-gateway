@@ -4,11 +4,13 @@ import type { RpcBroker, RpcRequest } from "../rpc/rpcBroker";
 
 // POST /internal/rpc/query — the integrations worker asks a named query of a tenant's connector.
 // Contract: specs/002-connector-rpc/contracts/tunnel.md. Own secret (GATEWAY_RPC_SECRET), not the Ávimus one.
+// dosql (spec 027): consulta "dosql" carries `sql` and empty params; the connector decides if it runs.
 
 const NAME = /^[a-z][a-z0-9_]{0,31}$/;
 const LABEL = /^[\w.-]{1,64}$/;
 const PARAM_KEY = /^[a-z][a-z0-9_]{0,31}$/;
-const MAX_BODY_BYTES = 16 * 1024;
+const MAX_BODY_BYTES = 32 * 1024; // 8000-char dosql SQL can double when JSON-escaped
+const MAX_SQL = 8000;
 
 function send(res: ServerResponse, status: number, body: unknown): void {
   res.statusCode = status;
@@ -52,9 +54,13 @@ export function parseRpcRequest(body: unknown): RpcRequest | null {
   if (typeof params !== "object" || params === null || Array.isArray(params)) return null;
   const entries = Object.entries(params as Record<string, unknown>);
   if (entries.length > 10 || !entries.every(([k, v]) => PARAM_KEY.test(k) && typeof v === "string" && v.length <= 200)) return null;
+  const dosql = b.consulta === "dosql";
+  if (dosql !== (b.sql !== undefined)) return null;
+  if (dosql && !(typeof b.sql === "string" && b.sql.length > 0 && b.sql.length <= MAX_SQL && entries.length === 0)) return null;
   return {
     tenantId: b.tenantId, connectorLabel: b.connectorLabel, sistema: b.sistema, consulta: b.consulta,
     params: Object.fromEntries(entries) as Record<string, string>, timeoutMs: b.timeoutMs,
+    ...(dosql ? { sql: b.sql as string } : {}),
   };
 }
 
