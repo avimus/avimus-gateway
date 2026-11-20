@@ -10,6 +10,7 @@ import { handleRpcQuery } from "./rpcQuery";
 import type { RpcBroker } from "../rpc/rpcBroker";
 import type { AvimusClient } from "../avimus-client/client";
 import { handleConnectorEvent, handleConnectorPackage, handleConnectorUpdate } from "./connectorUpdate";
+import { handleConnectorInstall } from "./connectorInstall";
 
 export interface HttpRouterDeps {
   registry: ConnectionRegistry;
@@ -64,6 +65,11 @@ export function createRequestHandler(deps: HttpRouterDeps): (req: IncomingMessag
 
     if (req.method === "GET" && path === "/conector/atualizacao") {
       void handleConnectorUpdate(req, res, { avimusClient: deps.avimusClient, logger: deps.logger });
+      return;
+    }
+
+    if (req.method === "GET" && path === "/conector/instalar") {
+      handleConnectorInstall(req, res);
       return;
     }
 
