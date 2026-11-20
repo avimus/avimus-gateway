@@ -11,6 +11,8 @@ export type InboundMessage =
       dados: Record<string, unknown>[];
       /** dosql (spec 027): column order of the SELECT, on the last page. */
       colunas?: string[];
+      /** dosql de escrita (spec 030): linhas que o comando afetou, na última página. */
+      linhas_afetadas?: number;
     }
   /** `mensagem`: dosql only, database text for the admin screen; never logged (it can carry patient data). */
   | { type: "query.error"; requestId: string; code: string; status: number; mensagem?: string };
@@ -76,10 +78,15 @@ export function parseInboundMessage(raw: string): InboundMessage {
           colunas.every((c) => typeof c === "string" && c.length > 0 && chars(c) <= 128))) {
         throw new MessageValidationError("query.response colunas must be up to 500 short strings");
       }
+      const linhas = msg.linhas_afetadas;
+      if (linhas !== undefined && !isNonNegativeInt(linhas)) {
+        throw new MessageValidationError("query.response linhas_afetadas must be a non-negative integer");
+      }
       return {
         type: "query.response", requestId: msg.requestId, page: msg.page, last: msg.last,
         truncado: msg.truncado, duracaoMs: msg.duracaoMs, dados: msg.dados as Record<string, unknown>[],
         ...(colunas ? { colunas: colunas as string[] } : {}),
+        ...(linhas !== undefined ? { linhas_afetadas: linhas as number } : {}),
       };
     }
     case "query.error": {

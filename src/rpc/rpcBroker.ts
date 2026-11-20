@@ -28,7 +28,7 @@ export interface RpcRequest {
 }
 
 export type RpcResult =
-  | { status: 200; body: { sistema: string; consulta: string; quantidade: number; truncado: boolean; duracao_ms: number; dados: Record<string, unknown>[]; colunas?: string[] } }
+  | { status: 200; body: { sistema: string; consulta: string; quantidade: number; truncado: boolean; duracao_ms: number; dados: Record<string, unknown>[]; colunas?: string[]; linhas_afetadas?: number } }
   | { status: number; body: { detail: string; mensagem?: string } };
 
 type ResponseFrame = Extract<InboundMessage, { type: "query.response" }>;
@@ -127,6 +127,7 @@ export class RpcBroker {
           sistema: entry.request.sistema, consulta: entry.request.consulta, quantidade: entry.rows.length,
           truncado: frame.truncado, duracao_ms: frame.duracaoMs, dados: entry.rows,
           ...(frame.colunas ? { colunas: frame.colunas } : {}),
+          ...(frame.linhas_afetadas !== undefined ? { linhas_afetadas: frame.linhas_afetadas } : {}),
         },
       });
     }

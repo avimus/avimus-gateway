@@ -50,6 +50,15 @@ export class AvimusClient {
     return data;
   }
 
+  /** Pacote de consultas exclusivas fixado para este hospital ({ yaml, bundle }); 404 se não há. */
+  async getConnectorPackage(tenantToken: string, sistema: string): Promise<unknown> {
+    const { data } = await this.http.get("/api/v1/internal/conector/pacote", {
+      headers: { "X-Tenant-Token": tenantToken },
+      params: { sistema },
+    });
+    return data;
+  }
+
   /** Resultado de uma tentativa do atualizador do conector, gravado como evento do tenant. */
   async sendConnectorEvent(
     tenantToken: string,

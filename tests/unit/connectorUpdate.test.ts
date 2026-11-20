@@ -59,3 +59,53 @@ test("evento: só formato fixo passa; repassa à Ávimus", async () => {
   }
   assert.equal(seen.length, 1);
 });
+
+import { AxiosError, AxiosHeaders } from "axios";
+import { handleConnectorPackage } from "../../src/http/connectorUpdate";
+
+test("evento: aceita versão de pacote pacote-<sistema>-v<N>", async () => {
+  const seen: unknown[] = [];
+  const client = { sendConnectorEvent: async (_t: string, m: unknown) => { seen.push(m); } } as unknown as AvimusClient;
+  for (const [versao, status] of [["pacote-tasy-v3", 202], ["pacote-tasy-removido", 202], ["pacote-Tasy-v3", 400], ["pacote-tasy-3", 400], ["pacote-tasy-apagado", 400]] as const) {
+    const res = fakeRes();
+    await handleConnectorEvent(post("Bearer hst_abcdefghijkl", JSON.stringify({ resultado: "ok", versao })), res as unknown as ServerResponse, { avimusClient: client, logger });
+    assert.equal(res.statusCode, status, versao);
+  }
+  assert.equal(seen.length, 2);
+});
+
+test("pacote: hst_ e sistema válidos; repassa; 404 vira PACOTE_NAO_FIXADO", async () => {
+  const seen: unknown[] = [];
+  let notFound = false;
+  const client = {
+    getConnectorPackage: async (t: string, s: string) => {
+      seen.push([t, s]);
+      if (notFound) {
+        const r = { status: 404, statusText: "", headers: {}, config: { headers: new AxiosHeaders() }, data: {} };
+        throw new AxiosError("nf", "ERR_BAD_REQUEST", r.config, null, r);
+      }
+      return { yaml: "y", bundle: "b" };
+    },
+  } as unknown as AvimusClient;
+  const deps = { avimusClient: client, logger };
+
+  const unauth = fakeRes();
+  await handleConnectorPackage(req(undefined, "/conector/pacote?sistema=tasy"), unauth as unknown as ServerResponse, deps);
+  assert.equal(unauth.statusCode, 401);
+  const bad = fakeRes();
+  await handleConnectorPackage(req("Bearer hst_abcdefghijkl", "/conector/pacote?sistema=../x"), bad as unknown as ServerResponse, deps);
+  assert.equal(bad.statusCode, 400);
+  assert.equal(seen.length, 0);
+
+  const ok = fakeRes();
+  await handleConnectorPackage(req("Bearer hst_abcdefghijkl", "/conector/pacote?sistema=tasy"), ok as unknown as ServerResponse, deps);
+  assert.equal(ok.statusCode, 200);
+  assert.deepEqual(JSON.parse(ok.body), { yaml: "y", bundle: "b" });
+  assert.deepEqual(seen, [["hst_abcdefghijkl", "tasy"]]);
+
+  notFound = true;
+  const nf = fakeRes();
+  await handleConnectorPackage(req("Bearer hst_abcdefghijkl", "/conector/pacote?sistema=tasy"), nf as unknown as ServerResponse, deps);
+  assert.equal(nf.statusCode, 404);
+  assert.equal(JSON.parse(nf.body).code, "PACOTE_NAO_FIXADO");
+});
