@@ -59,13 +59,35 @@ test("rpc: off without GATEWAY_RPC_SECRET; wrong secret 401; malformed body 422"
   });
 });
 
-test("rpc: no connector for tenant + label → 503 connector_offline", async () => {
+test("rpc: no connector for the tenant → 503 connector_offline", async () => {
   await withApp(async (running) => {
-    const { ws } = await connector(running, "hosp-1", "outro-label");
+    const { ws } = await connector(running, "outro-hosp", "unidade-centro");
     const r = await ask(running, body());
     assert.equal(r.status, 503);
     assert.deepEqual(await r.json(), { detail: "connector_offline" });
     ws.close();
+  });
+});
+
+test("rpc: token trocado (rótulo velho) com um único conector no tenant → vai para ele", async () => {
+  await withApp(async (running) => {
+    const { ws, frames } = await connector(running, "hosp-1", "rotulo-novo");
+    const pending = ask(running, body());
+    const req = await frames.next();
+    ws.send(JSON.stringify({ type: "query.error", requestId: req.requestId, code: "x_teste", status: 503 }));
+    assert.equal((await pending).status, 503);
+    ws.close();
+  });
+});
+
+test("rpc: rótulo velho com dois conectores no tenant → 503 connector_label_mismatch (não adivinha)", async () => {
+  await withApp(async (running) => {
+    const a = await connector(running, "hosp-1", "unidade-a");
+    const b = await connector(running, "hosp-1", "unidade-b");
+    const r = await ask(running, body());
+    assert.equal(r.status, 503);
+    assert.deepEqual(await r.json(), { detail: "connector_label_mismatch" });
+    a.ws.close(); b.ws.close();
   });
 });
 
@@ -189,8 +211,6 @@ test("rpc: label is the token prefix even when the Ávimus returns erpName (two 
     const frames = new MessageCollector(ws);
     await waitForOpenOrClose(ws);
     await frames.next();
-    const porErp = await ask(running, body({ tenantId: "tenant-avimus-1", connectorLabel: "sgu" }));
-    assert.deepEqual(await porErp.json(), { detail: "connector_offline" });
     const pending = ask(running, body({ tenantId: "tenant-avimus-1", connectorLabel: "hst_ffff0000" }));
     const req = await frames.next();
     ws.send(JSON.stringify({ type: "query.error", requestId: req.requestId, code: "sgu_db_ocupado", status: 503 }));

@@ -57,10 +57,21 @@ export class RpcBroker {
   }
 
   query(request: RpcRequest): Promise<RpcResult> {
-    const candidates = this.registry
-      .connectionsForTenant(request.tenantId)
-      .filter((c) => c.label === request.connectorLabel && c.socket.readyState === WebSocket.OPEN)
-      .sort((a, b) => b.lastActivityAt.getTime() - a.lastActivityAt.getTime());
+    const open = this.registry.connectionsForTenant(request.tenantId).filter((c) => c.socket.readyState === WebSocket.OPEN);
+    let candidates = open.filter((c) => c.label === request.connectorLabel);
+    // Token trocado no admin: o rótulo da conexão do worker (gateway://<tenant>/<hst_ 12>) fica com o do token antigo.
+    // Com um único conector ligado neste tenant não há ambiguidade (o tenant já vem do token dele): usa esse e avisa.
+    // ponytail: com dois ou mais conectores no tenant não adivinha; o operador corrige o endereço da conexão.
+    if (!candidates.length && open.length) {
+      const labels = new Set(open.map((c) => c.label));
+      if (labels.size !== 1) {
+        this.log(request, undefined, 503, "connector_label_mismatch", 0);
+        return Promise.resolve(fail(503, "connector_label_mismatch"));
+      }
+      candidates = open;
+      this.log(request, undefined, 0, "connector_label_replaced", 0);
+    }
+    candidates.sort((a, b) => b.lastActivityAt.getTime() - a.lastActivityAt.getTime());
     const connection = candidates.find((c) => this.inFlight(c) < MAX_PENDING_PER_CONNECTION);
     if (connection && this.pending.size >= MAX_PENDING_TOTAL) {
       this.log(request, undefined, 503, "gateway_busy", 0);
