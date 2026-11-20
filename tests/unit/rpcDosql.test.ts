@@ -69,3 +69,18 @@ test("broker: forwards sql, returns colunas and mensagem, logs neither", async (
   assert.ok(logs.some((l) => l.includes('"consulta":"dosql"')));
   assert.ok(logs.every((l) => !l.includes("12345678901") && !l.includes("SELECT")));
 });
+
+test("dosql de escrita (spec 030): linhas_afetadas é validado e chega ao worker", async () => {
+  const requestId = "0b6f3c1e-8f2a-4c3d-9e4f-5a6b7c8d9e0f";
+  const frame = { type: "query.response", requestId, page: 0, last: true, truncado: false, duracaoMs: 1, dados: [] };
+  assert.throws(() => parseInboundMessage(JSON.stringify({ ...frame, linhas_afetadas: -1 })));
+  assert.throws(() => parseInboundMessage(JSON.stringify({ ...frame, linhas_afetadas: "3" })));
+
+  const { b, sent, connection } = broker();
+  const pedido = parseRpcRequest({ ...base, consulta: "dosql", params: {}, sql: SQL })!;
+  const ok = b.query(pedido);
+  const req = sent[0] as { requestId: string };
+  const parsed = parseInboundMessage(JSON.stringify({ ...frame, requestId: req.requestId, linhas_afetadas: 3 }));
+  b.onFrame(connection, parsed as never);
+  assert.equal(((await ok).body as { linhas_afetadas?: number }).linhas_afetadas, 3);
+});
